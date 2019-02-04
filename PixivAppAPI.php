@@ -10,6 +10,8 @@
  * @link     https://github.com/kokororin/pixiv-api-php
  */
 
+ use \voku\helper\HtmlDomParser;
+
 class PixivAppAPI extends PixivBase
 {
     /**
@@ -111,6 +113,76 @@ class PixivAppAPI extends PixivBase
             'headers' => array_merge($this->noneAuthHeaders, $this->headers),
             'body' => $body,
         ));
+    }
+
+    public function search_illust_web($word, $page = 1, $order = 'date_d')
+    {
+        $body = array(
+            'word' => $word,
+            'p' => $page,
+            'order' => $order
+        );
+
+        $fetch_result = $this->fetch('/search.php', array(
+            'method' => 'get',
+            'body' => $body
+        ), 'https://www.pixiv.net', false);
+
+        $dom = HtmlDomParser::str_get_html($fetch_result);
+        $elems = $dom->find('#js-mount-point-search-result-list');
+        if (isset($elems[0])) {
+            $json = $elems[0]->getAllAttributes()['data-items'];
+            $json = str_replace("&quot;", '"', $json);
+            $data = json_decode($json, true);
+            $formated_result = array(
+                "count" => count($data),
+                "status" => "success",
+                "pagination" => array(
+                    "current" => $p,
+                    "next" => null,
+                    "per_page" => count($data),
+                    "previous" => null,
+                    "total" => count($data)
+                ),
+                "response" => array()
+            );
+
+            $regex = "/https:\/\/i\.pximg\.net\/c\/240x240\/img-master\/img\/(.*?_p0)_master1200.jpg/";
+            $large_prefix = "https://api.pixiv.moe/v2/image/i.pximg.net/img-original/img/$1.jpg";
+            $medium_prefix = "https://api.pixiv.moe/v2/image/i.pximg.net/c/600x600/img-master/img/$1_master1200.jpg";
+            $px128_prefix = "https://api.pixiv.moe/v2/image/i.pximg.net/c/128x128/img-master/img/$1_square1200.jpg";
+            $px480_prefix = "https://api.pixiv.moe/v2/image/i.pximg.net/c/480x960/img-master/img/$1_master1200.jpg";
+            $small_prefix = "https://api.pixiv.moe/v2/image/i.pximg.net/c/150x150/img-master/img/$1_master1200.jpg";
+
+
+            foreach ($data as $datum) {    
+                array_push($formated_result['response'], array(
+                    "id" => $datum['illustId'],
+                    "title" => $datum['illustTitle'],
+                    "image_urls" => array(
+                        "large" => preg_replace($regex, $large_prefix, $datum['url']),
+                        "medium" => preg_replace($regex, $medium_prefix, $datum['url']),
+                        "px_128x128" => preg_replace($regex, $px128_prefix, $datum['url']),
+                        "px_480mw" => preg_replace($regex, $px480_prefix, $datum['url']),
+                        "small" => preg_replace($regex, $small_prefix, $datum['url'])
+                    ),
+                    "stats" => array(
+                        "commented_count" => $datum['responseCount'],
+                        // we can't get those data from webapi...
+                        "favorited_count" => array(
+                            "public" => 23333,
+                            "private" => 233
+                        ),
+                        "score" => 0,
+                        "scored_count" => 0,
+                        "views_count" => 666
+                    )
+                ));
+            }
+            return $formated_result;
+        } else {
+            return ["status" => "failed"];
+        }
     }
 
     /**
@@ -299,5 +371,4 @@ class PixivAppAPI extends PixivBase
             ),
         ));
     }
-
 }

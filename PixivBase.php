@@ -177,7 +177,7 @@ abstract class PixivBase
      * @param array $params
      * @return mixed
      */
-    protected function fetch($uri, $options = array())
+    protected function fetch($uri, $options = array(), $prefix = null, $decode_json = true)
     {
         $method = isset($options['method']) ? strtolower($options['method']) : 'get';
         if (!in_array($method, array('post', 'get', 'put', 'delete'))) {
@@ -185,7 +185,12 @@ abstract class PixivBase
         }
         $body = isset($options['body']) ? $options['body'] : array();
         $headers = isset($options['headers']) ? $options['headers'] : array();
-        $url = $this->api_prefix . $uri;
+        
+        if (!empty($prefix))
+            $url = $prefix . $uri;
+        else
+            $url = $this->api_prefix . $uri;
+
         foreach ($body as $key => $value) {
             if (is_bool($value)) {
                 $body[$key] = ($value) ? 'true' : 'false';
@@ -204,9 +209,13 @@ abstract class PixivBase
 
         $result = $curl->response;
         $curl->close();
-        $array = json_decode(json_encode($result), true);
 
-        return $array;
+        if ($decode_json) {
+            $array = json_decode(json_encode($result), true);
+            return $array;
+        } else {
+            return $result;
+        }
     }
 
 }
